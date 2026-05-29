@@ -262,7 +262,7 @@ export async function POST(req: Request) {
     let magistrate;
     try {
       magistrate = await generateObject({
-        model: modelConfig.model, // <--- DYNAMIC MODEL
+        model: google("gemini-2.5-flash"), // <--- THE HYBRID FIX
         maxRetries: 0,
         system: `You are the Chief Magistrate for Verdict.AI. You evaluate the complete trial timeline and issue a final ruling.`,
         prompt: `ORIGINAL INTAKE: ${argument}\n\nPROSECUTION ATTACK: ${round1Prosecutor.text}\n\nLOGICIAN OPTIMIZATION: ${round2Logician.text}\n\nFINAL RE-EXAMINATION: ${finalProsecution.text}`,
