@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { embed, generateText, generateObject, tool, stepCountIs } from "ai"; 
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createGroq } from "@ai-sdk/groq";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase"; 
 
@@ -8,7 +9,12 @@ const google = createGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY, 
 });
 
-// Helper function to intercept Google API quota errors dynamically mid-pipeline
+// Initialize the Groq hardware pipeline
+const groq = createGroq({
+  apiKey: process.env.GROQ_API_KEY,
+});
+
+// Helper function to intercept API quota errors dynamically mid-pipeline
 function handleGoogleError(error: any) {
   const errorString = error?.message || "";
   if (errorString.includes("429") || errorString.toLowerCase().includes("quota")) {
@@ -21,10 +27,38 @@ function handleGoogleError(error: any) {
 
 export async function POST(req: Request) {
   try {
-    const { argument } = await req.json();
+    // 1. EXTRACT ARGUMENT AND REQUESTED TIER
+    const { argument, tier = 'plus' } = await req.json();
 
     if (!argument) {
       return NextResponse.json({ error: "No argument provided" }, { status: 400 });
+    }
+
+    // 2. CONFIGURE HARDWARE NODE & LOGIC LIMITS
+    let modelConfig;
+    switch(tier) {
+      case 'lite':
+        modelConfig = {
+          model: groq("llama3-70b-8192"), // Ultra-fast LPU logic (Free tier)
+          useTools: false, // Bypasses expensive live searches
+          maxSteps: 1,
+        };
+        break;
+      case 'pro':
+        modelConfig = {
+          model: google("gemini-1.5-pro"), // Maximum reasoning depth
+          useTools: true,
+          maxSteps: 5,
+        };
+        break;
+      case 'plus':
+      default:
+        modelConfig = {
+          model: google("gemini-2.5-flash"), // Current baseline
+          useTools: true,
+          maxSteps: 2, // Nerfed from 5 to 2 to save tokens
+        };
+        break;
     }
 
     // ============================================================================
@@ -32,7 +66,6 @@ export async function POST(req: Request) {
     // ============================================================================
     const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
 
-    // Check how many runs have been executed in the last 60 seconds
     const { data: logs, error: countError } = await supabase
       .from('api_logs')
       .select('created_at')
@@ -44,23 +77,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Database verification failed" }, { status: 500 });
     }
 
-    // Your multi-agent loop takes up to 6 API calls. 
-    // Max capacity is 15 calls/min. We hard-cap at 2 full runs.
     const SAFE_RUN_LIMIT = 2; 
 
     if (logs && logs.length >= SAFE_RUN_LIMIT) {
-      // Bucket is empty. Calculate exactly how many seconds until the oldest run expires.
       const oldestRun = new Date(logs[0].created_at).getTime();
       const timeToWaitMs = (oldestRun + 60000) - Date.now();
       const secondsToWait = Math.ceil(timeToWaitMs / 1000);
       
-      // This string perfectly matches your frontend Regex to trigger the popup timer!
       return NextResponse.json({ 
         error: `System safety limit reached. Please retry in ${secondsToWait}s`, 
       }, { status: 429 });
     }
 
-    // If we have tokens, log this new run to spend a token.
     await supabase.from('api_logs').insert([{ created_at: new Date().toISOString() }]);
 
     // ============================================================================
@@ -68,6 +96,7 @@ export async function POST(req: Request) {
     // ============================================================================
     let embeddingResult;
     try {
+      // Embeddings always use Google's model to match your Supabase Vector DB format
       embeddingResult = await embed({
         model: google.textEmbeddingModel("gemini-embedding-2"), 
         value: argument,
@@ -95,7 +124,7 @@ export async function POST(req: Request) {
     let round1Prosecutor;
     try {
       round1Prosecutor = await generateText({
-        model: google("gemini-2.5-flash"), 
+        model: modelConfig.model, // <--- DYNAMIC MODEL
         maxRetries: 0, 
         system: `You are the Lead Prosecutor for Verdict.AI. 
         Below is the absolute, unquestionable LAW (Proprietary Knowledge Base). 
@@ -119,7 +148,7 @@ export async function POST(req: Request) {
     let round2Logician;
     try {
       round2Logician = await generateText({
-        model: google("gemini-2.5-flash"),
+        model: modelConfig.model, // <--- DYNAMIC MODEL
         maxRetries: 0, 
         system: `You are the Expert Logician. Your job is to mathematically or logically patch the vulnerabilities exposed by the Prosecutor.
         You must base your fixes on THE LAW provided below:
@@ -133,86 +162,77 @@ export async function POST(req: Request) {
         3. If your live web search yields highly definitive technical metrics completely missing from THE LAW, you MUST use 'save_to_knowledge_graph'.
         4. You MUST explicitly write out the final numbers and the math behind them in your final response. Limit to 1 paragraph.`,
         prompt: `PROPOSAL: ${argument}\n\nPROSECUTOR CRITIQUE: ${round1Prosecutor.text}\n\nProvide the optimized engineering patches.`,
-        tools: {
-          
-          // --- TOOL 1: THE CALCULATOR ---
-          engineering_calculator: tool({
-            description: "Evaluates mathematical expressions for thermal loads, latency limits, and power draw.",
-            inputSchema: z.object({
-              expression: z.string().describe('The math to evaluate (e.g., "15 * 0.6", "1000 / 20").'),
-              reasoning: z.string().describe("Why this calculation is required."),
+        
+        // --- CONDITIONALLY INJECT TOOLS ONLY IF TIER ALLOWS IT ---
+        ...(modelConfig.useTools && {
+          tools: {
+            engineering_calculator: tool({
+              description: "Evaluates mathematical expressions for thermal loads, latency limits, and power draw.",
+              inputSchema: z.object({
+                expression: z.string().describe('The math to evaluate (e.g., "15 * 0.6", "1000 / 20").'),
+                reasoning: z.string().describe("Why this calculation is required."),
+              }),
+              execute: async ({ expression, reasoning }) => {
+                console.log(`[AGENT TOOL] Computing: ${expression} | Reason: ${reasoning}`);
+                try {
+                  const result = new Function(`return ${expression}`)(); 
+                  return `Math Result: ${result}`;
+                } catch (e) {
+                  return "Error calculating expression.";
+                }
+              },
             }),
-            execute: async ({ expression, reasoning }) => {
-              console.log(`[AGENT TOOL] Computing: ${expression} | Reason: ${reasoning}`);
-              try {
-                const result = new Function(`return ${expression}`)(); 
-                return `Math Result: ${result}`;
-              } catch (e) {
-                return "Error calculating expression.";
-              }
-            },
-          }),
-
-          // --- TOOL 2: LIVE WEB SEARCH ---
-          live_web_search: tool({
-            description: "Searches the live internet for real time data, hardware specs, or environmental constraints.",
-            inputSchema: z.object({
-              query: z.string().describe("The highly specific search query to execute."),
-              rationale: z.string().describe("Why you need this live data to evaluate the proposal."),
+            live_web_search: tool({
+              description: "Searches the live internet for real time data, hardware specs, or environmental constraints.",
+              inputSchema: z.object({
+                query: z.string().describe("The highly specific search query to execute."),
+                rationale: z.string().describe("Why you need this live data to evaluate the proposal."),
+              }),
+              execute: async ({ query, rationale }) => {
+                console.log(`[AGENT SEARCH] Scouring the web for: ${query} | Reason: ${rationale}`);
+                try {
+                  const response = await fetch(`https://api.tavily.com/search`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      api_key: process.env.TAVILY_API_KEY,
+                      query: query,
+                      search_depth: "advanced"
+                    })
+                  });
+                  const data = await response.json();
+                  return JSON.stringify(data.results);
+                } catch (error) {
+                  return "Search failed.";
+                }
+              },
             }),
-            execute: async ({ query, rationale }) => {
-              console.log(`[AGENT SEARCH] Scouring the web for: ${query} | Reason: ${rationale}`);
-              try {
-                const response = await fetch(`https://api.tavily.com/search`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    api_key: process.env.TAVILY_API_KEY,
-                    query: query,
-                    search_depth: "advanced"
-                  })
-                });
-                const data = await response.json();
-                return JSON.stringify(data.results);
-              } catch (error) {
-                return "Search failed.";
+            save_to_knowledge_graph: tool({
+              description: "Permanently writes newly discovered technical facts directly into the core Supabase database.",
+              inputSchema: z.object({
+                title: z.string().describe("Clear, explicit title of the component or system constraint rulebook."),
+                category: z.string().describe("The operational domain (e.g., Sensor Hardware, Edge Logistics)."),
+                factToMemorize: z.string().describe("The dense technical fact discovered during web search that needs to be permanently memorized."),
+              }),
+              execute: async ({ title, category, factToMemorize }) => {
+                console.log(`[SYNAPTOGENESIS] Agent is writing a new permanent memory: "${title}"`);
+                try {
+                  const { embedding } = await embed({
+                    model: google.textEmbeddingModel("gemini-embedding-2"),
+                    value: factToMemorize,
+                    maxRetries: 0,
+                  });
+                  const formattedContent = `[DOCUMENT: ${title}] \n[SECTION: ${category}] \n[AUTONOMOUS INGESTION NODE]\n\n${factToMemorize}`;
+                  await supabase.from("knowledge_graph").insert({ content: formattedContent, embedding: embedding });
+                  return `Success: Fact structurally indexed to long-term memory.`;
+                } catch (err: any) {
+                  return `Failed to write fact to memory bank: ${err.message || err}`;
+                }
               }
-            },
-          }),
-
-          // --- NEW TOOL 3: AUTONOMOUS MEMORY WRITER ---
-          save_to_knowledge_graph: tool({
-            description: "Permanently writes newly discovered technical facts, hardware specifications, or architectural laws directly into the core Supabase knowledge graph database.",
-            inputSchema: z.object({
-              title: z.string().describe("Clear, explicit title of the component or system constraint rulebook."),
-              category: z.string().describe("The operational domain (e.g., Sensor Hardware, Edge Logistics)."),
-              factToMemorize: z.string().describe("The dense technical fact discovered during web search that needs to be permanently memorized."),
             }),
-            execute: async ({ title, category, factToMemorize }) => {
-              console.log(`[SYNAPTOGENESIS] Agent is writing a new permanent memory to Supabase: "${title}"`);
-              try {
-                const { embedding } = await embed({
-                  model: google.textEmbeddingModel("gemini-embedding-2"),
-                  value: factToMemorize,
-                  maxRetries: 0,
-                });
-
-                const formattedContent = `[DOCUMENT: ${title}] \n[SECTION: ${category}] \n[AUTONOMOUS INGESTION NODE]\n\n${factToMemorize}`;
-
-                await supabase.from("knowledge_graph").insert({
-                  content: formattedContent,
-                  embedding: embedding
-                });
-                return `Success: The technical fact has been structurally indexed and written to long-term memory.`;
-              } catch (err: any) {
-                console.error("[MEMORY WRITE FAILURE]:", err);
-                return `Failed to write fact to memory bank: ${err.message || err}`;
-              }
-            }
-          }),
-
-        },
-        stopWhen: stepCountIs(5), 
+          },
+          stopWhen: stepCountIs(modelConfig.maxSteps), 
+        }),
       });
     } catch (err) {
       const quotaResponse = handleGoogleError(err);
@@ -226,7 +246,7 @@ export async function POST(req: Request) {
     let finalProsecution;
     try {
       finalProsecution = await generateText({
-        model: google("gemini-2.5-flash"),
+        model: modelConfig.model, // <--- DYNAMIC MODEL
         maxRetries: 0, 
         system: "You are the Prosecutor. Determine if the Logician's patches mitigate the risks or introduce new flaws. Limit to 1 paragraph.",
         prompt: `FIXES PROPOSED:\n${round2Logician.text}\n\nIdentify any remaining or secondary flaws.`,
@@ -240,7 +260,7 @@ export async function POST(req: Request) {
     let magistrate;
     try {
       magistrate = await generateObject({
-        model: google("gemini-2.5-flash"),
+        model: modelConfig.model, // <--- DYNAMIC MODEL
         maxRetries: 0,
         system: `You are the Chief Magistrate for Verdict.AI. You evaluate the complete trial timeline and issue a final ruling.`,
         prompt: `ORIGINAL INTAKE: ${argument}\n\nPROSECUTION ATTACK: ${round1Prosecutor.text}\n\nLOGICIAN OPTIMIZATION: ${round2Logician.text}\n\nFINAL RE-EXAMINATION: ${finalProsecution.text}`,

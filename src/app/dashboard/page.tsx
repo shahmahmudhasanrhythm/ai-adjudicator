@@ -2,20 +2,24 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link"; // Added Link import
+import Link from "next/link"; 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { 
   ShieldAlert, Gavel, Send, Layers, 
   Terminal, Activity, Cpu, CheckCircle2,
   Lock, Hexagon, Radio, Compass, ChevronRight, HelpCircle, Mic,
-  Volume2, VolumeX
+  Volume2, VolumeX, Zap, BrainCircuit
 } from "lucide-react";
 
 export default function Dashboard() {
   const [argument, setArgument] = useState("");
   const [isDeliberating, setIsDeliberating] = useState(false);
   const [verdictResult, setVerdictResult] = useState<any>(null);
+
+  // --- HARDWARE TIER STATE ---
+  const [showTierSelect, setShowTierSelect] = useState(false);
+  const [activeTier, setActiveTier] = useState("plus"); // Remembers tier for auto-retries
 
   // --- RATE LIMIT STATE VARIABLES ---
   const [isRateLimited, setIsRateLimited] = useState(false);
@@ -119,8 +123,8 @@ export default function Dashboard() {
       timer = setInterval(() => setCountdown((prev) => prev - 1), 1000);
     } else if (isRateLimited && countdown === 0) {
       setIsRateLimited(false);
-      // Auto-trigger the submit function when timer hits 0
-      handleSubmit(new Event('submit') as any); 
+      // Auto-trigger the API with the previously selected tier when timer hits 0
+      executeAnalysis(activeTier); 
     }
     return () => clearInterval(timer);
   }, [isRateLimited, countdown]);
@@ -179,10 +183,17 @@ export default function Dashboard() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // --- 1. INTERCEPT SUBMIT TO SHOW MODAL ---
+  const handleInitialSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!argument.trim()) return;
-    
+    setShowTierSelect(true); // Open the Hardware Selection Modal
+  };
+
+  // --- 2. EXECUTE TRIBUNAL WITH SELECTED TIER ---
+  const executeAnalysis = async (selectedTier: string) => {
+    setShowTierSelect(false);
+    setActiveTier(selectedTier);
     setIsDeliberating(true);
     setVerdictResult(null);
     stopAudioBroadcast(); // Flush ongoing streams on new submission
@@ -191,7 +202,10 @@ export default function Dashboard() {
       const response = await fetch("/api/adjudicate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ argument }),
+        body: JSON.stringify({ 
+          argument: argument,
+          tier: selectedTier 
+        }),
       });
       
       const data = await response.json();
@@ -229,7 +243,7 @@ export default function Dashboard() {
       
       {/* --- THE NEW RATE LIMIT POPUP --- */}
       {isRateLimited && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md">
           <div className="bg-gray-950 border border-gray-800 p-8 rounded-2xl max-w-md w-full text-center shadow-[0_0_50px_rgba(0,0,0,0.8)]">
             <h2 className="text-xl font-bold text-zinc-100 mb-2 font-serif tracking-wide">Verdict.AI Community Tier</h2>
             <p className="text-zinc-400 mb-6 text-sm leading-relaxed">
@@ -242,6 +256,69 @@ export default function Dashboard() {
               <Radio className="h-3 w-3" /> System is maintaining connection...
             </div>
           </div>
+        </div>
+      )}
+
+      {/* --- TIER SELECTION MODAL POPUP --- */}
+      {showTierSelect && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#070303] border border-white/10 p-8 rounded-3xl w-full max-w-4xl shadow-[0_0_100px_rgba(0,0,0,1)] relative overflow-hidden"
+          >
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-zinc-500/40 to-transparent" />
+            
+            <h2 className="text-2xl font-serif tracking-widest text-white mb-2">Hardware Selection</h2>
+            <p className="text-sm text-zinc-500 mb-8 font-mono">Allocate processing cores for this tribunal.</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              
+              {/* LITE */}
+              <button onClick={() => executeAnalysis('lite')} className="flex flex-col text-left p-6 rounded-2xl border border-white/5 hover:border-amber-500/50 bg-white/5 hover:bg-amber-500/5 transition-all group">
+                <Zap className="h-6 w-6 text-zinc-500 group-hover:text-amber-400 mb-4 transition-colors" />
+                <h3 className="text-lg font-bold text-white mb-1">Lite Node</h3>
+                <p className="text-xs text-zinc-500 mb-6 font-mono">Llama 3.3 (70B) LPU</p>
+                <ul className="text-xs text-zinc-400 space-y-2 mt-auto">
+                  <li className="flex items-center"><span className="text-amber-500 mr-2">✓</span>Ultra-low Latency</li>
+                  <li className="flex items-center"><span className="text-amber-500 mr-2">✓</span>Logic Validation</li>
+                  <li className="flex items-center text-zinc-600"><span className="mr-2">✕</span>Web Tools Disabled</li>
+                </ul>
+              </button>
+
+              {/* PLUS (DEFAULT) */}
+              <button onClick={() => executeAnalysis('plus')} className="flex flex-col text-left p-6 rounded-2xl border border-rose-500/40 hover:border-rose-500 bg-rose-500/5 hover:bg-rose-500/10 transition-all group relative overflow-hidden shadow-[0_0_30px_rgba(244,63,94,0.1)]">
+                <div className="absolute top-0 right-0 bg-rose-500 text-[9px] font-bold px-3 py-1 uppercase text-white rounded-bl-xl tracking-widest">Current</div>
+                <BrainCircuit className="h-6 w-6 text-rose-500 mb-4" />
+                <h3 className="text-lg font-bold text-white mb-1">Plus Node</h3>
+                <p className="text-xs text-rose-500/70 mb-6 font-mono">Gemini 2.5 Flash</p>
+                <ul className="text-xs text-zinc-400 space-y-2 mt-auto">
+                  <li className="flex items-center"><span className="text-rose-500 mr-2">✓</span>Balanced Compute</li>
+                  <li className="flex items-center"><span className="text-rose-500 mr-2">✓</span>Vector DB Retrieval</li>
+                  <li className="flex items-center"><span className="text-rose-500 mr-2">✓</span>Math Tools</li>
+                </ul>
+              </button>
+
+              {/* PRO */}
+              <button onClick={() => executeAnalysis('pro')} className="flex flex-col text-left p-6 rounded-2xl border border-white/5 hover:border-indigo-500/50 bg-white/5 hover:bg-indigo-500/5 transition-all group">
+                <Cpu className="h-6 w-6 text-zinc-500 group-hover:text-indigo-400 mb-4 transition-colors" />
+                <h3 className="text-lg font-bold text-white mb-1">Pro Node</h3>
+                <p className="text-xs text-zinc-500 group-hover:text-indigo-400/70 mb-6 font-mono transition-colors">Gemini 1.5 Pro</p>
+                <ul className="text-xs text-zinc-400 space-y-2 mt-auto">
+                  <li className="flex items-center"><span className="text-indigo-500 mr-2">✓</span>Deep Logic Parsing</li>
+                  <li className="flex items-center"><span className="text-indigo-500 mr-2">✓</span>Live Web Scraping</li>
+                  <li className="flex items-center"><span className="text-indigo-500 mr-2">✓</span>Full Agent Loop</li>
+                </ul>
+              </button>
+            </div>
+
+            <button 
+              onClick={() => setShowTierSelect(false)} 
+              className="mt-8 text-[11px] text-zinc-600 hover:text-white uppercase tracking-widest transition-colors w-full text-center"
+            >
+              Abort Operation
+            </button>
+          </motion.div>
         </div>
       )}
 
@@ -264,7 +341,6 @@ export default function Dashboard() {
       <header className="relative z-20 w-full px-6 py-4 flex items-center justify-between border-b border-white/[0.05] bg-[#050508]/80 backdrop-blur-xl shadow-md">
         <div className="flex items-center gap-6">
           
-          {/* THE NEW CLICKABLE HOME LINK */}
           <Link href="/" className="flex items-center gap-3 cursor-pointer group">
             <motion.div 
               whileHover={{ rotate: 180 }}
@@ -396,7 +472,8 @@ export default function Dashboard() {
               <span className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase">Status: <span className="text-emerald-400">Ready</span></span>
             </div>
             
-            <form onSubmit={handleSubmit} className="flex-1 flex flex-col p-6 min-h-0 gap-4">
+            {/* INTERCEPTED FORM - OPENS MODAL NOW */}
+            <form onSubmit={handleInitialSubmit} className="flex-1 flex flex-col p-6 min-h-0 gap-4">
               <div className="flex-1 relative rounded-xl bg-black/50 border border-white/[0.03] p-5 focus-within:border-indigo-500/30 transition-all flex flex-col shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] min-h-0">
                 <Textarea
                   placeholder="Draft your operational architecture, or use the microphone to dictate your strategic frameworks here..."
