@@ -1,8 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-export async function middleware(request: NextRequest) {
-  // 1. Create an unmodified response
+export async function proxy(request: NextRequest) {  // 1. Create an unmodified response
   let supabaseResponse = NextResponse.next({ request });
 
   // 2. Initialize the modern Supabase SSR client
