@@ -124,7 +124,7 @@ export async function POST(req: Request) {
     let round1Prosecutor;
     try {
       round1Prosecutor = await generateText({
-        model: modelConfig.model, // <--- DYNAMIC MODEL
+        model: modelConfig.model, 
         maxRetries: 0, 
         system: `You are the Lead Prosecutor for Verdict.AI. 
         Below is the absolute, unquestionable LAW (Proprietary Knowledge Base). 
@@ -148,7 +148,7 @@ export async function POST(req: Request) {
     let round2Logician;
     try {
       round2Logician = await generateText({
-        model: modelConfig.model, // <--- DYNAMIC MODEL
+        model: modelConfig.model, 
         maxRetries: 0, 
         system: `You are the Expert Logician. Your job is to mathematically or logically patch the vulnerabilities exposed by the Prosecutor.
         You must base your fixes on THE LAW provided below:
@@ -248,7 +248,7 @@ export async function POST(req: Request) {
     let finalProsecution;
     try {
       finalProsecution = await generateText({
-        model: modelConfig.model, // <--- DYNAMIC MODEL
+        model: modelConfig.model, 
         maxRetries: 0, 
         system: "You are the Prosecutor. Determine if the Logician's patches mitigate the risks or introduce new flaws. Limit to 1 paragraph.",
         prompt: `FIXES PROPOSED:\n${round2Logician.text}\n\nIdentify any remaining or secondary flaws.`,
@@ -259,10 +259,13 @@ export async function POST(req: Request) {
       throw err;
     }
 
+    // ============================================================================
+    // ROUND 4: THE MAGISTRATE (Hybrid Structured Formatting Output Node)
+    // ============================================================================
     let magistrate;
     try {
       magistrate = await generateObject({
-        model: google("gemini-2.5-flash"), // <--- THE HYBRID FIX
+        model: google("gemini-2.5-flash"), 
         maxRetries: 0,
         system: `You are the Chief Magistrate for Verdict.AI. You evaluate the complete trial timeline and issue a final ruling.`,
         prompt: `ORIGINAL INTAKE: ${argument}\n\nPROSECUTION ATTACK: ${round1Prosecutor.text}\n\nLOGICIAN OPTIMIZATION: ${round2Logician.text}\n\nFINAL RE-EXAMINATION: ${finalProsecution.text}`,
@@ -270,6 +273,11 @@ export async function POST(req: Request) {
           verdict: z.string().describe("A definitive 2-4 word final legal/technical ruling in all caps."),
           score: z.string().describe("A numeric score from 0 to 100 measuring final systemic viability (e.g., '85')."),
           chiefJusticeRuling: z.string().describe("A professional, multi-sentence executive summary explaining if the system can safely scale."),
+          simulationParams: z.object({
+            gravityMultiplier: z.number().describe("Float between 0.5 and 3.0 based on structural weight stress."),
+            restitution: z.number().describe("Float between 0.1 and 1.0. Higher is more volatile/bouncy."),
+            payloadDensity: z.number().describe("Float between 0.1 (light) and 2.0 (heavy armor).")
+          }).describe("Physical stress testing parameters mapping structural mechanics onto the interactive frontend simulation node.")
         }),
       });
     } catch (err) {
@@ -282,7 +290,8 @@ export async function POST(req: Request) {
       verdict: magistrate.object.verdict,
       score: magistrate.object.score,
       prosecutorCritique: `[PROSECUTION DISCOVERY]\n${round1Prosecutor.text}\n\n[RE-EXAMINATION DEBATE]\n${finalProsecution.text}`,
-      chiefJusticeRuling: `[MAGISTRATE DIRECTIVE]\n${magistrate.object.chiefJusticeRuling}\n\n[PROPOSED REMEDIATION MATRIX]\n${round2Logician.text}`
+      chiefJusticeRuling: `[MAGISTRATE DIRECTIVE]\n${magistrate.object.chiefJusticeRuling}\n\n[PROPOSED REMEDIATION MATRIX]\n${round2Logician.text}`,
+      simulationParams: magistrate.object.simulationParams // <--- EXTRACTED FOR KINETIC MATRIX GRAPH
     });
 
   } catch (error: any) {

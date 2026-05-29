@@ -11,6 +11,7 @@ import {
   Lock, Hexagon, Radio, Compass, ChevronRight, HelpCircle, Mic,
   Volume2, VolumeX, Zap, BrainCircuit
 } from "lucide-react";
+import KineticMatrix from "@/components/KineticMatrix"; // <--- NEW IMPORT
 
 export default function Dashboard() {
   const [argument, setArgument] = useState("");
@@ -636,6 +637,13 @@ export default function Dashboard() {
                       </div>
                       <p className="text-zinc-300 leading-relaxed text-[15px]">{verdictResult.chiefJusticeRuling}</p>
                     </div>
+
+                    {/* --- NEW KINETIC MATRIX SIMULATION --- */}
+                    {verdictResult?.simulationParams && (
+                      <div className="pt-2">
+                        <KineticMatrix params={verdictResult.simulationParams} />
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
