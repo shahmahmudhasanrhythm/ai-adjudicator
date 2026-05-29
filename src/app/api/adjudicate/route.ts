@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     switch(tier) {
       case 'lite':
         modelConfig = {
-          model: groq("llama3-70b-8192"), // Ultra-fast LPU logic (Free tier)
+          model: groq("llama-3.3-70b-versatile"), // Ultra-fast LPU logic (Free tier)
           useTools: false, // Bypasses expensive live searches
           maxSteps: 1,
         };
