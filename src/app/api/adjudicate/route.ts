@@ -157,14 +157,16 @@ export async function POST(req: Request) {
         ${knowledgeBase}
         
         CRITICAL INSTRUCTIONS: 
-        1. You MUST use your 'engineering_calculator' tool to verify specific thermal loads, latency, or power adjustments. 
-        2. If you need external specifications or context, use 'live_web_search'.
-        3. If your live web search yields highly definitive technical metrics completely missing from THE LAW, you MUST use 'save_to_knowledge_graph'.
+        ${modelConfig.useTools 
+          ? `1. You MUST use your 'engineering_calculator' tool to verify specific thermal loads, latency, or power adjustments. 
+             2. If you need external specifications or context, use 'live_web_search'.
+             3. If your live web search yields highly definitive technical metrics completely missing from THE LAW, you MUST use 'save_to_knowledge_graph'.`
+          : `1. Use rigorous internal logic to estimate thermal loads, latency, or power adjustments since live tools are offline for this tier.`}
         4. You MUST explicitly write out the final numbers and the math behind them in your final response. Limit to 1 paragraph.`,
         prompt: `PROPOSAL: ${argument}\n\nPROSECUTOR CRITIQUE: ${round1Prosecutor.text}\n\nProvide the optimized engineering patches.`,
         
         // --- CONDITIONALLY INJECT TOOLS ONLY IF TIER ALLOWS IT ---
-        ...(modelConfig.useTools && {
+        ...(modelConfig.useTools ? {
           tools: {
             engineering_calculator: tool({
               description: "Evaluates mathematical expressions for thermal loads, latency limits, and power draw.",
@@ -232,7 +234,7 @@ export async function POST(req: Request) {
             }),
           },
           stopWhen: stepCountIs(modelConfig.maxSteps), 
-        }),
+        } : {}),
       });
     } catch (err) {
       const quotaResponse = handleGoogleError(err);
@@ -266,7 +268,7 @@ export async function POST(req: Request) {
         prompt: `ORIGINAL INTAKE: ${argument}\n\nPROSECUTION ATTACK: ${round1Prosecutor.text}\n\nLOGICIAN OPTIMIZATION: ${round2Logician.text}\n\nFINAL RE-EXAMINATION: ${finalProsecution.text}`,
         schema: z.object({
           verdict: z.string().describe("A definitive 2-4 word final legal/technical ruling in all caps."),
-          score: z.number().describe("An integer from 0 to 100 measuring final systemic viability."),
+          score: z.string().describe("A numeric score from 0 to 100 measuring final systemic viability (e.g., '85')."),
           chiefJusticeRuling: z.string().describe("A professional, multi-sentence executive summary explaining if the system can safely scale."),
         }),
       });
