@@ -138,7 +138,8 @@ export async function POST(req: Request) {
           // --- TOOL 1: THE CALCULATOR ---
           engineering_calculator: tool({
             description: "Evaluates mathematical expressions for thermal loads, latency limits, and power draw.",
-            parameters: z.object({
+            // CHANGED from 'parameters' to 'inputSchema'
+            inputSchema: z.object({
               expression: z.string().describe('The math to evaluate (e.g., "15 * 0.6", "1000 / 20").'),
               reasoning: z.string().describe("Why this calculation is required."),
             }),
@@ -156,7 +157,8 @@ export async function POST(req: Request) {
           // --- TOOL 2: LIVE WEB SEARCH ---
           live_web_search: tool({
             description: "Searches the live internet for real time data, hardware specs, or environmental constraints.",
-            parameters: z.object({
+            // CHANGED from 'parameters' to 'inputSchema'
+            inputSchema: z.object({
               query: z.string().describe("The highly specific search query to execute."),
               rationale: z.string().describe("Why you need this live data to evaluate the proposal."),
             }),
@@ -183,7 +185,8 @@ export async function POST(req: Request) {
           // --- NEW TOOL 3: AUTONOMOUS MEMORY WRITER ---
           save_to_knowledge_graph: tool({
             description: "Permanently writes newly discovered technical facts, hardware specifications, or architectural laws directly into the core Supabase knowledge graph database.",
-            parameters: z.object({
+            // CHANGED from 'parameters' to 'inputSchema'
+            inputSchema: z.object({
               title: z.string().describe("Clear, explicit title of the component or system constraint rulebook."),
               category: z.string().describe("The operational domain (e.g., Sensor Hardware, Edge Logistics)."),
               factToMemorize: z.string().describe("The dense technical fact discovered during web search that needs to be permanently memorized."),
