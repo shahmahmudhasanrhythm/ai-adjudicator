@@ -1,10 +1,13 @@
+"use client";
+
 import { motion } from "framer-motion";
-import { Fingerprint, FileText, CheckCircle2 } from "lucide-react";
+import { Fingerprint, FileText, CheckCircle2, ExternalLink } from "lucide-react";
 
 interface Citation {
   sourceName: string;
   relevance: string;
   confidence: number;
+  url?: string; // <--- NEW: Added URL property
 }
 
 interface ReferenceBureauProps {
@@ -52,7 +55,22 @@ export default function ReferenceBureau({ citations }: ReferenceBureauProps) {
               <div className="flex items-start gap-2">
                 <FileText className="h-4 w-4 text-zinc-500 mt-0.5 shrink-0" />
                 <div>
-                  <div className="text-xs font-bold text-zinc-200 tracking-wide mb-1.5">{cite.sourceName}</div>
+                  <div className="text-xs font-bold text-zinc-200 tracking-wide mb-1.5 flex items-center gap-2">
+                    {/* --- NEW: Clickable URL Logic --- */}
+                    {cite.url && cite.url.startsWith("http") ? (
+                      <a 
+                        href={cite.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="hover:text-emerald-400 transition-colors flex items-center gap-1.5 group"
+                      >
+                        {cite.sourceName}
+                        <ExternalLink className="h-3 w-3 text-zinc-600 group-hover:text-emerald-400 transition-colors" />
+                      </a>
+                    ) : (
+                      cite.sourceName
+                    )}
+                  </div>
                   <div className="text-[11px] text-zinc-400 italic border-l-2 border-emerald-500/30 pl-2 leading-relaxed">
                     "{cite.relevance}"
                   </div>

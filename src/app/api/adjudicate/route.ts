@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { embed, generateText, generateObject, tool, stepCountIs } from "ai"; 
+import { embed, generateText, generateObject, tool } from "ai"; 
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createGroq } from "@ai-sdk/groq";
 import { z } from "zod";
@@ -243,7 +243,7 @@ export async function POST(req: Request) {
               }
             }),
           },
-          stopWhen: stepCountIs(modelConfig.maxSteps), 
+          maxSteps: modelConfig.maxSteps, // <--- FIXED: Correct tool looping parameter
         } : {}),
       });
     } catch (err) {
@@ -270,7 +270,7 @@ export async function POST(req: Request) {
     }
 
     // ============================================================================
-    // ROUND 4: THE MAGISTRATE (Now with Citation Ledger)
+    // ROUND 4: THE MAGISTRATE (Now with Citation Ledger & Clickable URLs)
     // ============================================================================
     let magistrate;
     try {
@@ -293,7 +293,8 @@ export async function POST(req: Request) {
           citations: z.array(z.object({
             sourceName: z.string().describe("The exact [DOCUMENT: Title] or [SECTION: Category] used as precedent."),
             relevance: z.string().describe("A highly specific 1-sentence technical quote or rationale extracted from the document."),
-            confidence: z.number().describe("A logic confidence score (0-100) determining how strictly this source enforces the verdict.")
+            confidence: z.number().describe("A logic confidence score (0-100) determining how strictly this source enforces the verdict."),
+            url: z.string().describe("A valid, clickable https:// URL to the official standard, Wikipedia, or credible technical documentation for this source.") // <--- NEW: Forces a URL
           })).describe("The cryptographic ledger of references used to mathematically prove the Chief Justice's ruling.")
         }),
       });
