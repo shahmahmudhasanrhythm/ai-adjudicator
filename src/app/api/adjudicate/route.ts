@@ -39,14 +39,14 @@ export async function POST(req: Request) {
     switch(tier) {
       case 'lite':
         modelConfig = {
-          model: groq("llama-3.3-70b-versatile"), // Ultra-fast LPU logic (Free tier)
-          useTools: false, // Bypasses expensive live searches
+          model: groq("llama-3.3-70b-versatile"), 
+          useTools: false, 
           maxSteps: 1,
         };
         break;
       case 'pro':
         modelConfig = {
-          model: google("gemini-1.5-pro"), // Maximum reasoning depth
+          model: google("gemini-1.5-pro"), 
           useTools: true,
           maxSteps: 5,
         };
@@ -54,9 +54,9 @@ export async function POST(req: Request) {
       case 'plus':
       default:
         modelConfig = {
-          model: google("gemini-2.5-flash"), // Current baseline
+          model: google("gemini-2.5-flash"), 
           useTools: true,
-          maxSteps: 2, // Nerfed from 5 to 2 to save tokens
+          maxSteps: 2, 
         };
         break;
     }
@@ -96,7 +96,6 @@ export async function POST(req: Request) {
     // ============================================================================
     let embeddingResult;
     try {
-      // Embeddings always use Google's model to match your Supabase Vector DB format
       embeddingResult = await embed({
         model: google.textEmbeddingModel("gemini-embedding-2"), 
         value: argument,
@@ -117,6 +116,18 @@ export async function POST(req: Request) {
     const knowledgeBase = contextResults && contextResults.length > 0 
       ? contextResults.map((r: any) => r.content).join("\n\n")
       : "No proprietary internal data found. Rely on rigorous generalized logic.";
+
+    // ============================================================================
+    // NEW: THE SIMULATION REGISTRY (Visual RAG Search)
+    // ============================================================================
+    const { data: simResults } = await supabase.rpc("match_simulation", {
+      query_embedding: embeddingResult.embedding,
+      match_threshold: 0.3, // Loose threshold to guarantee a visual match
+      match_count: 1, 
+    });
+    
+    // Extract the JSON blueprint if we found one
+    const activeBlueprint = simResults && simResults.length > 0 ? simResults[0].blueprint_json : null;
 
     // ============================================================================
     // ROUND 1: THE PROSECUTOR 
@@ -143,7 +154,7 @@ export async function POST(req: Request) {
     }
 
     // ============================================================================
-    // ROUND 2: THE LOGICIAN (Equipped with Calculator, Search, and Writing Pen)
+    // ROUND 2: THE LOGICIAN 
     // ============================================================================
     let round2Logician;
     try {
@@ -165,7 +176,6 @@ export async function POST(req: Request) {
         4. You MUST explicitly write out the final numbers and the math behind them in your final response. Limit to 1 paragraph.`,
         prompt: `PROPOSAL: ${argument}\n\nPROSECUTOR CRITIQUE: ${round1Prosecutor.text}\n\nProvide the optimized engineering patches.`,
         
-        // --- CONDITIONALLY INJECT TOOLS ONLY IF TIER ALLOWS IT ---
         ...(modelConfig.useTools ? {
           tools: {
             engineering_calculator: tool({
@@ -260,14 +270,14 @@ export async function POST(req: Request) {
     }
 
     // ============================================================================
-    // ROUND 4: THE MAGISTRATE (Hybrid Structured Formatting Output Node)
+    // ROUND 4: THE MAGISTRATE (Now with Citation Ledger)
     // ============================================================================
     let magistrate;
     try {
       magistrate = await generateObject({
         model: google("gemini-2.5-flash"), 
         maxRetries: 0,
-        system: `You are the Chief Magistrate for Verdict.AI. You evaluate the complete trial timeline and issue a final ruling.`,
+        system: `You are the Chief Magistrate for Verdict.AI. You evaluate the complete trial timeline and issue a final ruling. You MUST explicitly cite the original [DOCUMENT] sources from the KNOWLEDGE BASE provided earlier to justify your verdict.`,
         prompt: `ORIGINAL INTAKE: ${argument}\n\nPROSECUTION ATTACK: ${round1Prosecutor.text}\n\nLOGICIAN OPTIMIZATION: ${round2Logician.text}\n\nFINAL RE-EXAMINATION: ${finalProsecution.text}`,
         schema: z.object({
           verdict: z.string().describe("A definitive 2-4 word final legal/technical ruling in all caps."),
@@ -277,7 +287,14 @@ export async function POST(req: Request) {
             gravityMultiplier: z.number().describe("Float between 0.5 and 3.0 based on structural weight stress."),
             restitution: z.number().describe("Float between 0.1 and 1.0. Higher is more volatile/bouncy."),
             payloadDensity: z.number().describe("Float between 0.1 (light) and 2.0 (heavy armor).")
-          }).describe("Physical stress testing parameters mapping structural mechanics onto the interactive frontend simulation node.")
+          }).describe("Physical stress testing parameters mapping structural mechanics onto the interactive frontend simulation node."),
+          
+          // --- NEW: THE CRYPTOGRAPHIC CITATION LEDGER ---
+          citations: z.array(z.object({
+            sourceName: z.string().describe("The exact [DOCUMENT: Title] or [SECTION: Category] used as precedent."),
+            relevance: z.string().describe("A highly specific 1-sentence technical quote or rationale extracted from the document."),
+            confidence: z.number().describe("A logic confidence score (0-100) determining how strictly this source enforces the verdict.")
+          })).describe("The cryptographic ledger of references used to mathematically prove the Chief Justice's ruling.")
         }),
       });
     } catch (err) {
@@ -291,7 +308,9 @@ export async function POST(req: Request) {
       score: magistrate.object.score,
       prosecutorCritique: `[PROSECUTION DISCOVERY]\n${round1Prosecutor.text}\n\n[RE-EXAMINATION DEBATE]\n${finalProsecution.text}`,
       chiefJusticeRuling: `[MAGISTRATE DIRECTIVE]\n${magistrate.object.chiefJusticeRuling}\n\n[PROPOSED REMEDIATION MATRIX]\n${round2Logician.text}`,
-      simulationParams: magistrate.object.simulationParams // <--- EXTRACTED FOR KINETIC MATRIX GRAPH
+      simulationParams: magistrate.object.simulationParams,
+      blueprint: activeBlueprint,
+      citations: magistrate.object.citations // <--- NEW: SENDING THE RECEIPTS TO THE UI
     });
 
   } catch (error: any) {

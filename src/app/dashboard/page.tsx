@@ -11,16 +11,18 @@ import {
   Lock, Hexagon, Radio, Compass, ChevronRight, HelpCircle, Mic,
   Volume2, VolumeX, Zap, BrainCircuit
 } from "lucide-react";
-import KineticMatrix from "@/components/KineticMatrix"; // <--- NEW IMPORT
+import UniversalMatrix from "@/components/UniversalMatrix";
+import ReferenceBureau from "@/components/ReferenceBureau"; // <--- ADDED REFERENCE BUREAU IMPORT
 
 export default function Dashboard() {
   const [argument, setArgument] = useState("");
   const [isDeliberating, setIsDeliberating] = useState(false);
   const [verdictResult, setVerdictResult] = useState<any>(null);
+  const [simulationBlueprint, setSimulationBlueprint] = useState<any>(null);
 
   // --- HARDWARE TIER STATE ---
   const [showTierSelect, setShowTierSelect] = useState(false);
-  const [activeTier, setActiveTier] = useState("plus"); // Remembers tier for auto-retries
+  const [activeTier, setActiveTier] = useState("plus"); 
 
   // --- RATE LIMIT STATE VARIABLES ---
   const [isRateLimited, setIsRateLimited] = useState(false);
@@ -62,21 +64,18 @@ export default function Dashboard() {
     if (typeof window === "undefined" || isAudioMuted) return;
     
     const synth = window.speechSynthesis;
-    synth.cancel(); // Terminate existing audio sequences
+    synth.cancel(); 
 
     const voices = availableVoices.length > 0 ? availableVoices : synth.getVoices();
 
-    // Filter for high-quality localized speech synthesis profiles (Google, Natural, or Premium)
     const premiumVoices = voices.filter(v => 
       v.lang.startsWith("en") && 
       (v.name.includes("Google") || v.name.includes("Natural") || v.name.includes("Enhanced") || v.name.includes("Premium"))
     );
 
-    // Assign structurally distinct voice tones to simulate an interactive chamber trial
     const prosecutorVoice = premiumVoices.find(v => v.name.includes("Female") || v.name.includes("Zira") || v.name.includes("Google US English")) || voices.find(v => v.lang.startsWith("en")) || voices[0];
     const magistrateVoice = premiumVoices.find(v => v.name.includes("Male") || v.name.includes("David") || v.name.includes("Google UK English Male")) || voices.find(v => v.lang.startsWith("en")) || voices[0];
 
-    // Format strings cleanly by removing metadata markers if present
     const cleanProsecutor = prosecutorText.replace(/\[.*?\]/g, "").trim();
     const cleanMagistrate = magistrateText.replace(/\[.*?\]/g, "").trim();
 
@@ -90,7 +89,6 @@ export default function Dashboard() {
     magistrateUtterance.rate = 0.96; 
     magistrateUtterance.pitch = 0.88; 
 
-    // Synchronize Audio Timeline with Avatar Node States
     prosecutorUtterance.onstart = () => setActiveSpeaker("prosecutor");
     prosecutorUtterance.onend = () => {
       setActiveSpeaker("magistrate");
@@ -124,7 +122,6 @@ export default function Dashboard() {
       timer = setInterval(() => setCountdown((prev) => prev - 1), 1000);
     } else if (isRateLimited && countdown === 0) {
       setIsRateLimited(false);
-      // Auto-trigger the API with the previously selected tier when timer hits 0
       executeAnalysis(activeTier); 
     }
     return () => clearInterval(timer);
@@ -188,7 +185,7 @@ export default function Dashboard() {
   const handleInitialSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!argument.trim()) return;
-    setShowTierSelect(true); // Open the Hardware Selection Modal
+    setShowTierSelect(true); 
   };
 
   // --- 2. EXECUTE TRIBUNAL WITH SELECTED TIER ---
@@ -197,7 +194,8 @@ export default function Dashboard() {
     setActiveTier(selectedTier);
     setIsDeliberating(true);
     setVerdictResult(null);
-    stopAudioBroadcast(); // Flush ongoing streams on new submission
+    setSimulationBlueprint(null); 
+    stopAudioBroadcast(); 
 
     try {
       const response = await fetch("/api/adjudicate", {
@@ -212,7 +210,6 @@ export default function Dashboard() {
       const data = await response.json();
 
       if (!response.ok || data.error) {
-        // RATE LIMIT INTERCEPTOR
         if (data.error && data.error.includes("retry in")) {
           const match = data.error.match(/retry in ([\d\.]+)s/);
           const secondsToWait = match ? Math.ceil(parseFloat(match[1])) : 20; 
@@ -227,7 +224,14 @@ export default function Dashboard() {
 
       setVerdictResult(data);
 
-      // Initialize High Quality Voice Sequence if stream is not uncoupled
+      // --- INJECT AI LOGIC INTO DYNAMIC BLUEPRINT ---
+      let dynamicBlueprint = data.blueprint;
+      if (dynamicBlueprint && data.simulationParams) {
+        if (!dynamicBlueprint.environment) dynamicBlueprint.environment = {};
+        dynamicBlueprint.environment.gravity = data.simulationParams.gravityMultiplier;
+      }
+      setSimulationBlueprint(dynamicBlueprint);
+
       if (!isAudioMuted) {
         playVerdictAudio(data.prosecutorCritique, data.chiefJusticeRuling);
       }
@@ -638,10 +642,17 @@ export default function Dashboard() {
                       <p className="text-zinc-300 leading-relaxed text-[15px]">{verdictResult.chiefJusticeRuling}</p>
                     </div>
 
-                    {/* --- NEW KINETIC MATRIX SIMULATION --- */}
-                    {verdictResult?.simulationParams && (
+                    {/* --- DYNAMIC UNIVERSAL MATRIX SIMULATION --- */}
+                    {simulationBlueprint && (
                       <div className="pt-2">
-                        <KineticMatrix params={verdictResult.simulationParams} />
+                        <UniversalMatrix blueprint={simulationBlueprint} />
+                      </div>
+                    )}
+
+                    {/* --- CRYPTOGRAPHIC CITATION LEDGER --- */}
+                    {verdictResult?.citations && (
+                      <div className="pt-2">
+                        <ReferenceBureau citations={verdictResult.citations} />
                       </div>
                     )}
                   </motion.div>
