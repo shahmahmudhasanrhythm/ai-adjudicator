@@ -11,14 +11,14 @@ import {
   Lock, Hexagon, Radio, Compass, ChevronRight, HelpCircle, Mic,
   Volume2, VolumeX, Zap, BrainCircuit
 } from "lucide-react";
-import UniversalMatrix from "@/components/UniversalMatrix";
-import ReferenceBureau from "@/components/ReferenceBureau"; // <--- ADDED REFERENCE BUREAU IMPORT
+import UniversalMatrix from "@/components/UniversalMatrix"; 
+import ReferenceBureau from "@/components/ReferenceBureau"; 
 
 export default function Dashboard() {
   const [argument, setArgument] = useState("");
   const [isDeliberating, setIsDeliberating] = useState(false);
   const [verdictResult, setVerdictResult] = useState<any>(null);
-  const [simulationBlueprint, setSimulationBlueprint] = useState<any>(null);
+  const [simulationBlueprint, setSimulationBlueprint] = useState<any>(null); 
 
   // --- HARDWARE TIER STATE ---
   const [showTierSelect, setShowTierSelect] = useState(false);
@@ -37,7 +37,6 @@ export default function Dashboard() {
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
-  // Clean up any speaking audio when the interface closes or changes
   useEffect(() => {
     if (typeof window !== "undefined") {
       const synth = window.speechSynthesis;
@@ -59,7 +58,6 @@ export default function Dashboard() {
     };
   }, []);
 
-  // --- PREMIUM SYSTEM AUDIO BROADCAST ENGINE ---
   const playVerdictAudio = (prosecutorText: string, magistrateText: string) => {
     if (typeof window === "undefined" || isAudioMuted) return;
     
@@ -76,8 +74,10 @@ export default function Dashboard() {
     const prosecutorVoice = premiumVoices.find(v => v.name.includes("Female") || v.name.includes("Zira") || v.name.includes("Google US English")) || voices.find(v => v.lang.startsWith("en")) || voices[0];
     const magistrateVoice = premiumVoices.find(v => v.name.includes("Male") || v.name.includes("David") || v.name.includes("Google UK English Male")) || voices.find(v => v.lang.startsWith("en")) || voices[0];
 
-    const cleanProsecutor = prosecutorText.replace(/\[.*?\]/g, "").trim();
-    const cleanMagistrate = magistrateText.replace(/\[.*?\]/g, "").trim();
+    const cleanProsecutor = prosecutorText ? prosecutorText.replace(/\[.*?\]/g, "").trim() : "";
+    const cleanMagistrate = magistrateText ? magistrateText.replace(/\[.*?\]/g, "").trim() : "";
+
+    if (!cleanProsecutor || !cleanMagistrate) return;
 
     const prosecutorUtterance = new SpeechSynthesisUtterance(cleanProsecutor);
     prosecutorUtterance.voice = prosecutorVoice;
@@ -115,7 +115,6 @@ export default function Dashboard() {
     setIsAudioMuted(!isAudioMuted);
   };
 
-  // --- AUTOMATED RETRY TIMER HOOK ---
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (isRateLimited && countdown > 0) {
@@ -127,7 +126,6 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, [isRateLimited, countdown]);
 
-  // --- VOICE ENGINE INITIALIZATION HOOK ---
   useEffect(() => {
     if (typeof window !== "undefined") {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -181,14 +179,12 @@ export default function Dashboard() {
     }
   };
 
-  // --- 1. INTERCEPT SUBMIT TO SHOW MODAL ---
   const handleInitialSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!argument.trim()) return;
     setShowTierSelect(true); 
   };
 
-  // --- 2. EXECUTE TRIBUNAL WITH SELECTED TIER ---
   const executeAnalysis = async (selectedTier: string) => {
     setShowTierSelect(false);
     setActiveTier(selectedTier);
@@ -224,7 +220,6 @@ export default function Dashboard() {
 
       setVerdictResult(data);
 
-      // --- INJECT AI LOGIC INTO DYNAMIC BLUEPRINT ---
       let dynamicBlueprint = data.blueprint;
       if (dynamicBlueprint && data.simulationParams) {
         if (!dynamicBlueprint.environment) dynamicBlueprint.environment = {};
@@ -232,7 +227,7 @@ export default function Dashboard() {
       }
       setSimulationBlueprint(dynamicBlueprint);
 
-      if (!isAudioMuted) {
+      if (!isAudioMuted && data.prosecutorCritique && data.chiefJusticeRuling) {
         playVerdictAudio(data.prosecutorCritique, data.chiefJusticeRuling);
       }
     } catch (error) {
@@ -246,7 +241,6 @@ export default function Dashboard() {
   return (
     <div className="relative h-screen w-screen bg-[#030305] text-zinc-200 flex flex-col overflow-hidden font-sans">
       
-      {/* --- THE NEW RATE LIMIT POPUP --- */}
       {isRateLimited && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md">
           <div className="bg-gray-950 border border-gray-800 p-8 rounded-2xl max-w-md w-full text-center shadow-[0_0_50px_rgba(0,0,0,0.8)]">
@@ -264,7 +258,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* --- TIER SELECTION MODAL POPUP --- */}
       {showTierSelect && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
           <motion.div 
@@ -279,7 +272,6 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               
-              {/* LITE */}
               <button onClick={() => executeAnalysis('lite')} className="flex flex-col text-left p-6 rounded-2xl border border-white/5 hover:border-amber-500/50 bg-white/5 hover:bg-amber-500/5 transition-all group">
                 <Zap className="h-6 w-6 text-zinc-500 group-hover:text-amber-400 mb-4 transition-colors" />
                 <h3 className="text-lg font-bold text-white mb-1">Lite Node</h3>
@@ -291,7 +283,6 @@ export default function Dashboard() {
                 </ul>
               </button>
 
-              {/* PLUS (DEFAULT) */}
               <button onClick={() => executeAnalysis('plus')} className="flex flex-col text-left p-6 rounded-2xl border border-rose-500/40 hover:border-rose-500 bg-rose-500/5 hover:bg-rose-500/10 transition-all group relative overflow-hidden shadow-[0_0_30px_rgba(244,63,94,0.1)]">
                 <div className="absolute top-0 right-0 bg-rose-500 text-[9px] font-bold px-3 py-1 uppercase text-white rounded-bl-xl tracking-widest">Current</div>
                 <BrainCircuit className="h-6 w-6 text-rose-500 mb-4" />
@@ -304,7 +295,6 @@ export default function Dashboard() {
                 </ul>
               </button>
 
-              {/* PRO */}
               <button onClick={() => executeAnalysis('pro')} className="flex flex-col text-left p-6 rounded-2xl border border-white/5 hover:border-indigo-500/50 bg-white/5 hover:bg-indigo-500/5 transition-all group">
                 <Cpu className="h-6 w-6 text-zinc-500 group-hover:text-indigo-400 mb-4 transition-colors" />
                 <h3 className="text-lg font-bold text-white mb-1">Pro Node</h3>
@@ -327,7 +317,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* --- AMBIENT 3D LIGHTING & GRID --- */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_70%_60%_at_50%_50%,#000_20%,transparent_100%)] opacity-70" />
         <motion.div 
@@ -342,10 +331,8 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* --- TOP TELEMETRY HEADER --- */}
       <header className="relative z-20 w-full px-6 py-4 flex items-center justify-between border-b border-white/[0.05] bg-[#050508]/80 backdrop-blur-xl shadow-md">
         <div className="flex items-center gap-6">
-          
           <Link href="/" className="flex items-center gap-3 cursor-pointer group">
             <motion.div 
               whileHover={{ rotate: 180 }}
@@ -359,7 +346,6 @@ export default function Dashboard() {
               <span className="text-[9px] text-zinc-500 tracking-[0.2em] uppercase font-semibold">Architecture Node</span>
             </div>
           </Link>
-
           <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md bg-white/[0.03] border border-white/[0.05] text-zinc-400 text-[10px] font-mono shadow-inner">
             <Lock className="h-3 w-3 text-emerald-500" />
             <span>NODE: EN-046 // SECURE SANDBOX</span>
@@ -376,7 +362,6 @@ export default function Dashboard() {
 
       <main className="relative z-10 flex-1 flex w-full min-h-0 overflow-hidden">
         
-        {/* --- LEFT SIDEBAR: SYSTEM METRICS --- */}
         <section className="w-72 bg-[#060609]/60 backdrop-blur-md border-r border-white/[0.05] p-5 hidden xl:flex flex-col gap-8 shadow-2xl z-20 overflow-y-auto scrollbar-hide">
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
             <div className="text-zinc-500 uppercase tracking-widest text-[10px] font-bold mb-4 flex items-center gap-2">
@@ -458,10 +443,8 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* --- WORKSPACE DIVIDER GRID --- */}
         <section className="flex-1 grid grid-cols-1 lg:grid-cols-2 min-h-0 p-6 gap-6 perspective-1000">
           
-          {/* LEFT: THE DOSSIER COMPILER */}
           <motion.div 
             whileHover={{ rotateX: 0.5, rotateY: 0.5 }}
             transition={{ type: "spring", stiffness: 400, damping: 30 }}
@@ -477,7 +460,6 @@ export default function Dashboard() {
               <span className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase">Status: <span className="text-emerald-400">Ready</span></span>
             </div>
             
-            {/* INTERCEPTED FORM - OPENS MODAL NOW */}
             <form onSubmit={handleInitialSubmit} className="flex-1 flex flex-col p-6 min-h-0 gap-4">
               <div className="flex-1 relative rounded-xl bg-black/50 border border-white/[0.03] p-5 focus-within:border-indigo-500/30 transition-all flex flex-col shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] min-h-0">
                 <Textarea
@@ -488,7 +470,6 @@ export default function Dashboard() {
                 />
                 
                 <div className="absolute bottom-3 right-4 flex items-center gap-3">
-                  {/* VOICE DICTATION BUTTON */}
                   <button 
                     onClick={toggleListening}
                     type="button"
@@ -521,7 +502,6 @@ export default function Dashboard() {
             </form>
           </motion.div>
 
-          {/* RIGHT: TRIBUNAL OUTPUT */}
           <motion.div 
             whileHover={{ rotateX: 0.5, rotateY: -0.5 }}
             transition={{ type: "spring", stiffness: 400, damping: 30 }}
@@ -535,7 +515,6 @@ export default function Dashboard() {
                 <span className="font-serif font-bold text-zinc-200 tracking-wide text-sm">CONSENSUS MONITOR</span>
               </div>
               
-              {/* INTERACTIVE VOICE COMMS CONFIGURATION SWITCH */}
               {verdictResult && (
                 <button 
                   type="button" 
@@ -579,10 +558,8 @@ export default function Dashboard() {
                     transition={{ duration: 0.4 }} 
                     className="space-y-6 pt-2 block w-full pb-4"
                   >
-                    {/* --- DECENTRALIZED VOICE AUDIO BROADCAST INTERFACE --- */}
                     <div className="flex items-center justify-center gap-6 mb-4">
                       
-                      {/* PROSECUTOR AUDIO AVATAR */}
                       <div className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeSpeaker === "prosecutor" ? "scale-110" : "scale-100 opacity-30"}`}>
                         <div className={`h-11 w-11 rounded-full border flex items-center justify-center transition-all ${
                           activeSpeaker === "prosecutor"
@@ -594,12 +571,10 @@ export default function Dashboard() {
                         <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-400">Prosecutor</span>
                       </div>
 
-                      {/* DATA CONNECTION STREAM GLYPH */}
                       <div className="h-px w-14 bg-gradient-to-r from-rose-500/20 via-zinc-800 to-indigo-500/20 relative">
                         {isDeliberating && <div className="absolute inset-0 bg-indigo-500 animate-ping opacity-30" />}
                       </div>
 
-                      {/* MAGISTRATE AUDIO AVATAR */}
                       <div className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeSpeaker === "magistrate" ? "scale-110" : "scale-100 opacity-30"}`}>
                         <div className={`h-11 w-11 rounded-full border flex items-center justify-center transition-all ${
                           activeSpeaker === "magistrate"
@@ -613,43 +588,45 @@ export default function Dashboard() {
 
                     </div>
 
-                    {/* Verdict Banner */}
-                    <div className="p-6 rounded-xl bg-gradient-to-br from-amber-500/10 to-transparent border border-amber-500/20 relative overflow-hidden shadow-lg">
-                      <div className="text-amber-500/80 font-bold tracking-[0.2em] uppercase mb-2 text-[10px] font-mono">Judicial Assessment</div>
-                      <div className="font-serif text-3xl text-amber-100 mb-6">{verdictResult.verdict}</div>
-                      <div className="inline-flex items-center gap-3 px-4 py-2.5 rounded-lg bg-black/60 border border-amber-500/10 shadow-inner">
-                        <span className="text-zinc-500 uppercase tracking-widest text-[10px] font-mono">Structural Score</span>
-                        <span className="font-bold text-xl text-zinc-100">{verdictResult.score}<span className="text-zinc-600 text-sm font-normal">/100</span></span>
+                    {verdictResult?.verdict && (
+                      <div className="p-6 rounded-xl bg-gradient-to-br from-amber-500/10 to-transparent border border-amber-500/20 relative overflow-hidden shadow-lg">
+                        <div className="text-amber-500/80 font-bold tracking-[0.2em] uppercase mb-2 text-[10px] font-mono">Judicial Assessment</div>
+                        <div className="font-serif text-3xl text-amber-100 mb-6">{verdictResult.verdict}</div>
+                        <div className="inline-flex items-center gap-3 px-4 py-2.5 rounded-lg bg-black/60 border border-amber-500/10 shadow-inner">
+                          <span className="text-zinc-500 uppercase tracking-widest text-[10px] font-mono">Structural Score</span>
+                          <span className="font-bold text-xl text-zinc-100">{verdictResult.score}<span className="text-zinc-600 text-sm font-normal">/100</span></span>
+                        </div>
                       </div>
-                    </div>
+                    )}
                     
-                    {/* Critique Cards */}
-                    <div className={`p-6 rounded-xl border transition-all duration-300 shadow-inner ${
-                      activeSpeaker === "prosecutor" ? "bg-rose-950/10 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.1)]" : "border-white/[0.04] bg-black/40"
-                    }`}>
-                      <div className="flex items-center gap-3 text-rose-400 mb-4 font-bold uppercase tracking-widest text-[10px] font-mono">
-                        <ShieldAlert className="h-4 w-4" /> Prosecutor Vulnerability Scan
+                    {verdictResult?.prosecutorCritique && (
+                      <div className={`p-6 rounded-xl border transition-all duration-300 shadow-inner ${
+                        activeSpeaker === "prosecutor" ? "bg-rose-950/10 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.1)]" : "border-white/[0.04] bg-black/40"
+                      }`}>
+                        <div className="flex items-center gap-3 text-rose-400 mb-4 font-bold uppercase tracking-widest text-[10px] font-mono">
+                          <ShieldAlert className="h-4 w-4" /> Prosecutor Vulnerability Scan
+                        </div>
+                        <p className="text-zinc-300 leading-relaxed text-[15px]">{verdictResult.prosecutorCritique}</p>
                       </div>
-                      <p className="text-zinc-300 leading-relaxed text-[15px]">{verdictResult.prosecutorCritique}</p>
-                    </div>
+                    )}
                     
-                    <div className={`p-6 rounded-xl border transition-all duration-300 shadow-inner ${
-                      activeSpeaker === "magistrate" ? "bg-indigo-950/10 border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.1)]" : "border-white/[0.04] bg-black/40"
-                    }`}>
-                      <div className="flex items-center gap-3 text-indigo-400 mb-4 font-bold uppercase tracking-widest text-[10px] font-mono">
-                        <CheckCircle2 className="h-4 w-4" /> Magistrate Resolution Protocol
+                    {verdictResult?.chiefJusticeRuling && (
+                      <div className={`p-6 rounded-xl border transition-all duration-300 shadow-inner ${
+                        activeSpeaker === "magistrate" ? "bg-indigo-950/10 border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.1)]" : "border-white/[0.04] bg-black/40"
+                      }`}>
+                        <div className="flex items-center gap-3 text-indigo-400 mb-4 font-bold uppercase tracking-widest text-[10px] font-mono">
+                          <CheckCircle2 className="h-4 w-4" /> Magistrate Resolution Protocol
+                        </div>
+                        <p className="text-zinc-300 leading-relaxed text-[15px]">{verdictResult.chiefJusticeRuling}</p>
                       </div>
-                      <p className="text-zinc-300 leading-relaxed text-[15px]">{verdictResult.chiefJusticeRuling}</p>
-                    </div>
+                    )}
 
-                    {/* --- DYNAMIC UNIVERSAL MATRIX SIMULATION --- */}
                     {simulationBlueprint && (
                       <div className="pt-2">
                         <UniversalMatrix blueprint={simulationBlueprint} />
                       </div>
                     )}
 
-                    {/* --- CRYPTOGRAPHIC CITATION LEDGER --- */}
                     {verdictResult?.citations && (
                       <div className="pt-2">
                         <ReferenceBureau citations={verdictResult.citations} />
@@ -664,7 +641,6 @@ export default function Dashboard() {
         </section>
       </main>
 
-      {/* --- BOTTOM FOOTER LAYER --- */}
       <footer className="relative z-20 w-full border-t border-white/[0.05] bg-[#030305] px-8 py-3 flex items-center justify-between text-[10px] text-zinc-600 font-mono tracking-widest uppercase">
         <div className="flex items-center gap-3">
           <span className="h-1.5 w-1.5 rounded-full bg-zinc-600" />
