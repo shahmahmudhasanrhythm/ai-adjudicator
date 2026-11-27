@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ...but DO commit the template that lists which keys are needed (no real values)
+!.env.example
+
+# benchmark outputs
+/benchmark/results/
