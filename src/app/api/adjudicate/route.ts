@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { embed, generateText, generateObject, tool } from "ai"; 
+import { embed, generateText, generateObject, tool, stepCountIs } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createGroq } from "@ai-sdk/groq";
 import { z } from "zod";
-import { supabase } from "@/lib/supabase"; 
+import { supabase } from "@/lib/supabase";
+import { evaluate } from "@/lib/safe-math";
 
 const google = createGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY, 
@@ -12,6 +13,33 @@ const google = createGoogleGenerativeAI({
 // Initialize the Groq hardware pipeline
 const groq = createGroq({
   apiKey: process.env.GROQ_API_KEY,
+});
+
+// Model names live in env vars so a model retirement never needs a code change.
+// (gemini-1.5-pro, the old Pro tier, has been shut down by Google.)
+const GEMINI_FLASH_MODEL = process.env.GEMINI_FLASH_MODEL || "gemini-2.5-flash";
+const GEMINI_PRO_MODEL = process.env.GEMINI_PRO_MODEL || "gemini-2.5-pro";
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+
+// The Magistrate's output format. Shared by the full debate and the
+// single-model baseline so the benchmark compares like with like.
+const verdictSchema = z.object({
+  verdict: z.string().describe("A definitive 2-4 word final legal/technical ruling in all caps."),
+  score: z.string().describe("A numeric score from 0 to 100 measuring final systemic viability (e.g., '85')."),
+  chiefJusticeRuling: z.string().describe("A professional, multi-sentence executive summary explaining if the system can safely scale."),
+  simulationParams: z.object({
+    gravityMultiplier: z.number().describe("Float between 0.5 and 3.0 based on structural weight stress."),
+    restitution: z.number().describe("Float between 0.1 and 1.0. Higher is more volatile/bouncy."),
+    payloadDensity: z.number().describe("Float between 0.1 (light) and 2.0 (heavy armor).")
+  }).describe("Physical stress testing parameters mapping structural mechanics onto the interactive frontend simulation node."),
+  citations: z.array(z.object({
+    sourceName: z.string().describe("The exact [DOCUMENT: Title] or [SECTION: Category] used as precedent."),
+    relevance: z.string().describe("A highly specific 1-sentence technical quote or rationale extracted from the document."),
+    confidence: z.number().describe("A logic confidence score (0-100) determining how strictly this source enforces the verdict."),
+    // LLMs will happily invent plausible-looking links. Asking for an empty
+    // string when unsure keeps the ledger honest; the UI already hides empty URLs.
+    url: z.string().describe("An https:// URL that appeared in the knowledge base or search results for this source. If you are not certain the exact URL exists, return an empty string. Never guess a URL.")
+  })).describe("The ledger of references used to justify the ruling.")
 });
 
 // Helper function to intercept API quota errors dynamically mid-pipeline
@@ -28,7 +56,8 @@ function handleGoogleError(error: any) {
 export async function POST(req: Request) {
   try {
     // 1. EXTRACT ARGUMENT AND REQUESTED TIER
-    const { argument, tier = 'plus' } = await req.json();
+    // mode: "debate" (default, 4 agents) or "single" (one model, used as a benchmark baseline)
+    const { argument, tier = 'plus', mode = 'debate' } = await req.json();
 
     if (!argument) {
       return NextResponse.json({ error: "No argument provided" }, { status: 400 });
@@ -39,14 +68,14 @@ export async function POST(req: Request) {
     switch(tier) {
       case 'lite':
         modelConfig = {
-          model: groq("llama-3.3-70b-versatile"), 
+          model: groq(GROQ_MODEL),
           useTools: false, 
           maxSteps: 1,
         };
         break;
       case 'pro':
         modelConfig = {
-          model: google("gemini-1.5-pro"), 
+          model: google(GEMINI_PRO_MODEL),
           useTools: true,
           maxSteps: 5,
         };
@@ -54,7 +83,7 @@ export async function POST(req: Request) {
       case 'plus':
       default:
         modelConfig = {
-          model: google("gemini-2.5-flash"), 
+          model: google(GEMINI_FLASH_MODEL),
           useTools: true,
           maxSteps: 2, 
         };
@@ -130,6 +159,37 @@ export async function POST(req: Request) {
     const activeBlueprint = simResults && simResults.length > 0 ? simResults[0].blueprint_json : null;
 
     // ============================================================================
+    // BASELINE MODE: one model, one call, same output format.
+    // Lets the benchmark answer "does the 4-agent debate actually beat a single model?"
+    // ============================================================================
+    if (mode === "single") {
+      let single;
+      try {
+        single = await generateObject({
+          model: modelConfig.model,
+          maxRetries: 0,
+          system: `You are a senior engineering reviewer. Judge whether the proposal is physically and technically viable, using the knowledge base below where relevant.\n[KNOWLEDGE BASE]\n${knowledgeBase}`,
+          prompt: `[PROPOSAL]\n${argument}`,
+          schema: verdictSchema,
+        });
+      } catch (err) {
+        const quotaResponse = handleGoogleError(err);
+        if (quotaResponse) return quotaResponse;
+        throw err;
+      }
+      return NextResponse.json({
+        mode: "single",
+        verdict: single.object.verdict,
+        score: single.object.score,
+        prosecutorCritique: "[SINGLE-MODEL BASELINE: no debate rounds were run]",
+        chiefJusticeRuling: single.object.chiefJusticeRuling,
+        simulationParams: single.object.simulationParams,
+        blueprint: activeBlueprint,
+        citations: single.object.citations,
+      });
+    }
+
+    // ============================================================================
     // ROUND 1: THE PROSECUTOR 
     // ============================================================================
     let round1Prosecutor;
@@ -187,10 +247,12 @@ export async function POST(req: Request) {
               execute: async ({ expression, reasoning }) => {
                 console.log(`[AGENT TOOL] Computing: ${expression} | Reason: ${reasoning}`);
                 try {
-                  const result = new Function(`return ${expression}`)(); 
+                  // SECURITY: evaluate() only understands arithmetic. The old
+                  // `new Function(...)` ran any JavaScript the model wrote.
+                  const result = evaluate(expression);
                   return `Math Result: ${result}`;
-                } catch (e) {
-                  return "Error calculating expression.";
+                } catch (e: any) {
+                  return `Error calculating expression: ${e?.message ?? "invalid input"}`;
                 }
               },
             }),
@@ -243,7 +305,9 @@ export async function POST(req: Request) {
               }
             }),
           },
-          maxSteps: modelConfig.maxSteps, // <--- FIXED: Correct tool looping parameter
+          // AI SDK 5+ removed `maxSteps`; without `stopWhen` the loop stops after
+          // ONE step, so the Logician could call a tool and never read the result.
+          stopWhen: stepCountIs(modelConfig.maxSteps),
         } : {}),
       });
     } catch (err) {
@@ -251,6 +315,11 @@ export async function POST(req: Request) {
       if (quotaResponse) return quotaResponse;
       throw err;
     }
+
+    // If the Logician spent every step on tool calls, `.text` can be empty.
+    const logicianText =
+      round2Logician.text?.trim() ||
+      "(The Logician used its full tool budget without writing a summary.)";
 
     // ============================================================================
     // ROUND 3: FINAL DEBATE & SYNTHESIS
@@ -261,7 +330,7 @@ export async function POST(req: Request) {
         model: modelConfig.model, 
         maxRetries: 0, 
         system: "You are the Prosecutor. Determine if the Logician's patches mitigate the risks or introduce new flaws. Limit to 1 paragraph.",
-        prompt: `FIXES PROPOSED:\n${round2Logician.text}\n\nIdentify any remaining or secondary flaws.`,
+        prompt: `FIXES PROPOSED:\n${logicianText}\n\nIdentify any remaining or secondary flaws.`,
       });
     } catch (err) {
       const quotaResponse = handleGoogleError(err);
@@ -275,28 +344,11 @@ export async function POST(req: Request) {
     let magistrate;
     try {
       magistrate = await generateObject({
-        model: google("gemini-2.5-flash"), 
+        model: google(GEMINI_FLASH_MODEL),
         maxRetries: 0,
         system: `You are the Chief Magistrate for Verdict.AI. You evaluate the complete trial timeline and issue a final ruling. You MUST explicitly cite the original [DOCUMENT] sources from the KNOWLEDGE BASE provided earlier to justify your verdict.`,
-        prompt: `ORIGINAL INTAKE: ${argument}\n\nPROSECUTION ATTACK: ${round1Prosecutor.text}\n\nLOGICIAN OPTIMIZATION: ${round2Logician.text}\n\nFINAL RE-EXAMINATION: ${finalProsecution.text}`,
-        schema: z.object({
-          verdict: z.string().describe("A definitive 2-4 word final legal/technical ruling in all caps."),
-          score: z.string().describe("A numeric score from 0 to 100 measuring final systemic viability (e.g., '85')."),
-          chiefJusticeRuling: z.string().describe("A professional, multi-sentence executive summary explaining if the system can safely scale."),
-          simulationParams: z.object({
-            gravityMultiplier: z.number().describe("Float between 0.5 and 3.0 based on structural weight stress."),
-            restitution: z.number().describe("Float between 0.1 and 1.0. Higher is more volatile/bouncy."),
-            payloadDensity: z.number().describe("Float between 0.1 (light) and 2.0 (heavy armor).")
-          }).describe("Physical stress testing parameters mapping structural mechanics onto the interactive frontend simulation node."),
-          
-          // --- NEW: THE CRYPTOGRAPHIC CITATION LEDGER ---
-          citations: z.array(z.object({
-            sourceName: z.string().describe("The exact [DOCUMENT: Title] or [SECTION: Category] used as precedent."),
-            relevance: z.string().describe("A highly specific 1-sentence technical quote or rationale extracted from the document."),
-            confidence: z.number().describe("A logic confidence score (0-100) determining how strictly this source enforces the verdict."),
-            url: z.string().describe("A valid, clickable https:// URL to the official standard, Wikipedia, or credible technical documentation for this source.") // <--- NEW: Forces a URL
-          })).describe("The cryptographic ledger of references used to mathematically prove the Chief Justice's ruling.")
-        }),
+        prompt: `ORIGINAL INTAKE: ${argument}\n\nPROSECUTION ATTACK: ${round1Prosecutor.text}\n\nLOGICIAN OPTIMIZATION: ${logicianText}\n\nFINAL RE-EXAMINATION: ${finalProsecution.text}`,
+        schema: verdictSchema,
       });
     } catch (err) {
       const quotaResponse = handleGoogleError(err);
@@ -308,7 +360,7 @@ export async function POST(req: Request) {
       verdict: magistrate.object.verdict,
       score: magistrate.object.score,
       prosecutorCritique: `[PROSECUTION DISCOVERY]\n${round1Prosecutor.text}\n\n[RE-EXAMINATION DEBATE]\n${finalProsecution.text}`,
-      chiefJusticeRuling: `[MAGISTRATE DIRECTIVE]\n${magistrate.object.chiefJusticeRuling}\n\n[PROPOSED REMEDIATION MATRIX]\n${round2Logician.text}`,
+      chiefJusticeRuling: `[MAGISTRATE DIRECTIVE]\n${magistrate.object.chiefJusticeRuling}\n\n[PROPOSED REMEDIATION MATRIX]\n${logicianText}`,
       simulationParams: magistrate.object.simulationParams,
       blueprint: activeBlueprint,
       citations: magistrate.object.citations // <--- NEW: SENDING THE RECEIPTS TO THE UI
