@@ -1,9 +1,13 @@
-# Verdict.AI: a multi-agent adjudicator for engineering proposals
+<p align="center"><img src="docs/card.png" alt="Verdict.AI" width="100%"></p>
+
+<p align="center">
+  <a href="https://github.com/shahmahmudhasanrhythm/ai-adjudicator/actions/workflows/tests.yml"><img src="https://github.com/shahmahmudhasanrhythm/ai-adjudicator/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
+  <img src="https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white" alt="Next.js">
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/license-MIT-5eead4" alt="MIT license">
+</p>
 
 Verdict.AI takes a technical proposal (for example "run a sensor network on 5 W solar panels in the Sahara") and puts it on trial. Four LLM agents argue over it in sequence, check it against a knowledge base, and return a scored verdict with citations.
-
-> 📸 *Add a screenshot or GIF of the dashboard here: `docs/demo.gif`*
-> 🔗 *Live demo: add your Vercel URL here*
 
 ## How it works
 
