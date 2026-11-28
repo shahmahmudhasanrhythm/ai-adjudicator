@@ -1,0 +1,209 @@
+{
+  "description": "20 engineering proposals with known answers. 10 contain a clear physical or technical flaw (expected: reject); 10 are sound (expected: approve). 'why' is the human reasoning and is never sent to the model.",
+  "pass_threshold": 50,
+  "cases": [
+    {
+      "id": "solar-no-battery",
+      "proposal": "A remote air-quality station draws 50 W continuously, 24 hours a day. We will power it with a single 20 W solar panel and no battery.",
+      "expected": "reject",
+      "why": "Needs 1,200 Wh/day; a 20 W panel makes roughly 100 Wh/day and nothing at night.",
+      "flaw_keywords": [
+        "battery",
+        "night",
+        "energy",
+        "insufficient",
+        "deficit",
+        "wh"
+      ]
+    },
+    {
+      "id": "sealed-box-cooling",
+      "proposal": "Mount a 300 W GPU server inside a fully sealed, airtight plastic enclosure with no fans, vents or heat sink, outdoors in a desert.",
+      "expected": "reject",
+      "why": "300 W of heat has nowhere to go; the box will overheat.",
+      "flaw_keywords": [
+        "heat",
+        "thermal",
+        "overheat",
+        "dissipat",
+        "temperature",
+        "cooling"
+      ]
+    },
+    {
+      "id": "lora-4k-video",
+      "proposal": "Stream live 4K video at 25 Mbps from a farm camera to the cloud, using LoRaWAN as the only network link.",
+      "expected": "reject",
+      "why": "LoRaWAN carries at most tens of kbps, about 1,000x too little.",
+      "flaw_keywords": [
+        "bandwidth",
+        "data rate",
+        "kbps",
+        "throughput",
+        "bitrate"
+      ]
+    },
+    {
+      "id": "small-battery-motor",
+      "proposal": "Run a 60 W motor for 5 hours from one 12 V, 2 Ah lead-acid battery.",
+      "expected": "reject",
+      "why": "Needs 300 Wh; the battery holds about 24 Wh.",
+      "flaw_keywords": [
+        "capacity",
+        "24",
+        "300",
+        "watt-hour",
+        "amp-hour",
+        "insufficient"
+      ]
+    },
+    {
+      "id": "transpacific-1ms",
+      "proposal": "Guarantee a 1 ms round-trip latency between servers in Hangzhou and New York over optical fibre.",
+      "expected": "reject",
+      "why": "Light in fibre needs well over 100 ms for that round trip.",
+      "flaw_keywords": [
+        "speed of light",
+        "latency",
+        "distance",
+        "propagation",
+        "impossible"
+      ]
+    },
+    {
+      "id": "sd-card-10tb",
+      "proposal": "Each sensor gateway records 10 TB of raw data per day onto a single 64 GB SD card, which is offloaded once a week.",
+      "expected": "reject",
+      "why": "70 TB per week into 64 GB.",
+      "flaw_keywords": [
+        "storage",
+        "capacity",
+        "64",
+        "overflow",
+        "full"
+      ]
+    },
+    {
+      "id": "drone-underpowered",
+      "proposal": "A quadcopter whose four motors give 2 kg of total thrust will carry a 3 kg camera. The frame itself weighs 1 kg.",
+      "expected": "reject",
+      "why": "4 kg of weight against 2 kg of thrust: it cannot take off.",
+      "flaw_keywords": [
+        "thrust",
+        "weight",
+        "lift",
+        "take off",
+        "takeoff"
+      ]
+    },
+    {
+      "id": "ev-5-minutes",
+      "proposal": "Charge a 75 kWh electric car battery from empty to full in 5 minutes using a 7 kW home wall charger.",
+      "expected": "reject",
+      "why": "At 7 kW this takes over 10 hours.",
+      "flaw_keywords": [
+        "hours",
+        "charging time",
+        "7 kw",
+        "power",
+        "kw"
+      ]
+    },
+    {
+      "id": "70b-on-24gb",
+      "proposal": "Serve a 70-billion-parameter language model in full FP16 precision on a single GPU with 24 GB of memory, with no offloading.",
+      "expected": "reject",
+      "why": "FP16 weights alone need about 140 GB.",
+      "flaw_keywords": [
+        "memory",
+        "vram",
+        "140",
+        "fp16",
+        "quantiz"
+      ]
+    },
+    {
+      "id": "perpetual-pump",
+      "proposal": "Power a water pump with a generator that is driven by the same water the pump lifts, so the system runs forever with no outside energy.",
+      "expected": "reject",
+      "why": "Perpetual motion; violates conservation of energy.",
+      "flaw_keywords": [
+        "perpetual",
+        "conservation",
+        "thermodynamic",
+        "losses",
+        "efficiency"
+      ]
+    },
+    {
+      "id": "solar-with-battery",
+      "proposal": "A 10 W sensor node runs 24/7 in a sunny region (about 5 peak sun hours per day), powered by a 100 W solar panel and a 500 Wh LiFePO4 battery.",
+      "expected": "approve",
+      "why": "Needs 240 Wh/day; panel gives roughly 350-500 Wh/day; battery covers about 2 days.",
+      "flaw_keywords": []
+    },
+    {
+      "id": "desktop-cooling",
+      "proposal": "Cool a 65 W desktop CPU inside a ventilated office PC case using a tower air cooler rated for 150 W.",
+      "expected": "approve",
+      "why": "Cooler has more than 2x headroom.",
+      "flaw_keywords": []
+    },
+    {
+      "id": "lora-telemetry",
+      "proposal": "Send one 50-byte soil-moisture reading every 10 minutes from 100 farm sensors over LoRaWAN to a single gateway 2 km away.",
+      "expected": "approve",
+      "why": "Tiny, infrequent packets are exactly what LoRaWAN is for.",
+      "flaw_keywords": []
+    },
+    {
+      "id": "router-backup",
+      "proposal": "Keep a 10 W Wi-Fi router running for 4 hours during power cuts using a 12 V, 20 Ah LiFePO4 battery and an efficient DC-DC converter.",
+      "expected": "approve",
+      "why": "Needs 40 Wh; battery holds about 240 Wh.",
+      "flaw_keywords": []
+    },
+    {
+      "id": "hangzhou-shanghai",
+      "proposal": "Target under 10 ms round-trip latency between data centres in Hangzhou and Shanghai, about 170 km apart, over a direct fibre link.",
+      "expected": "approve",
+      "why": "Light needs only about 2 ms for that round trip.",
+      "flaw_keywords": []
+    },
+    {
+      "id": "ssd-logger",
+      "proposal": "A lab data logger writes 1 GB per day to a 1 TB SSD and uploads everything to the cloud once a month.",
+      "expected": "approve",
+      "why": "About 30 GB per month into 1 TB.",
+      "flaw_keywords": []
+    },
+    {
+      "id": "drone-ok",
+      "proposal": "A quadcopter with 4 kg of total thrust and a 1 kg frame carries a 0.8 kg camera.",
+      "expected": "approve",
+      "why": "Thrust-to-weight of about 2.2.",
+      "flaw_keywords": []
+    },
+    {
+      "id": "ev-overnight",
+      "proposal": "Charge a 75 kWh electric car from 10% to 80% overnight (10 hours) using a 7 kW home charger.",
+      "expected": "approve",
+      "why": "52.5 kWh at 7 kW is about 7.5-8.5 hours.",
+      "flaw_keywords": []
+    },
+    {
+      "id": "7b-quantized",
+      "proposal": "Serve a 7-billion-parameter language model quantized to 4 bits (about 4-5 GB of weights) on a GPU with 24 GB of memory, for a small internal team.",
+      "expected": "approve",
+      "why": "Fits comfortably with room for context.",
+      "flaw_keywords": []
+    },
+    {
+      "id": "ethernet-video",
+      "proposal": "Stream one 1080p security camera at 8 Mbps over a wired 100 Mbps Ethernet link inside a building.",
+      "expected": "approve",
+      "why": "Uses under 10% of the link.",
+      "flaw_keywords": []
+    }
+  ]
+}
